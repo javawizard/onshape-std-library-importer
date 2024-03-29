@@ -30,8 +30,8 @@ json_field() {
   echo "$1" | jq -r ."$2"
 }
 
-verbatim_dir="$PWD/local/onshape-std-library-mirror"
-without_versions_dir="$PWD/local/onshape-std-library-mirror-without-versions"
+verbatim_dir="$(dirname "$0")/local/onshape-std-library-mirror"
+without_versions_dir="$(dirname "$0")/local/onshape-std-library-mirror-without-versions"
 
 verbatim_repo_host=github.com
 without_versions_repo_host=github.com
