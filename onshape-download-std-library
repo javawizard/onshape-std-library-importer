@@ -37,6 +37,8 @@ verbatim_repo_host=github.com
 without_versions_repo_host=github.com
 
 if [ -n "${VERBATIM_SSH_KEY:-}" ]; then
+  mkdir -p ~/.ssh
+  chmod 700 ~/.ssh
   echo "
 Host github-verbatim-repo-host
   Hostname github.com
@@ -44,10 +46,13 @@ Host github-verbatim-repo-host
   " >> ~/.ssh/config
 
   echo "$VERBATIM_SSH_KEY" > ~/.ssh/id_rsa_verbatim_repo
+  chmod 600 ~/.ssh/id_rsa_verbatim_repo
   verbatim_repo_host=github-verbatim-repo-host
 fi
 
 if [ -n "${WITHOUT_VERSIONS_SSH_KEY:-}" ]; then
+  mkdir -p ~/.ssh
+  chmod 700 ~/.ssh
   echo "
 Host github-without-versions-repo-host
   Hostname github.com
@@ -55,6 +60,7 @@ Host github-without-versions-repo-host
   " >> ~/.ssh/config
 
   echo "$WITHOUT_VERSIONS_SSH_KEY" > ~/.ssh/id_rsa_without_versions_repo
+  chmod 600 ~/.ssh/id_rsa_without_versions_repo
   without_versions_repo_host=github-without-versions-repo-host
 fi
 
