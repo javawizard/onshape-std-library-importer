@@ -19,6 +19,9 @@ fi
 ONSHAPE_STD_DOC_ID=12312312345abcabcabcdeff
 ONSHAPE_STD_VWM_ID=w/a855e4161c814f2e9ab3698a
 
+VERBATIM_REPO_REMOTE=git@github.com:javawizard/onshape-std-library-mirror
+WITHOUT_VERSIONS_REPO_REMOTE=git@github.com:javawizard/onshape-std-library-mirror-without-versions
+
 COMMIT_AUTHOR="Onshape Standard Library Importer <alex+onshape-std-library-importer@opengroove.org>"
 
 call_api() {
@@ -33,35 +36,19 @@ json_field() {
 verbatim_dir="$(dirname "$0")/local/onshape-std-library-mirror"
 without_versions_dir="$(dirname "$0")/local/onshape-std-library-mirror-without-versions"
 
-verbatim_repo_host=github.com
-without_versions_repo_host=github.com
+verbatim_ssh_command=ssh
+without_versions_ssh_command=ssh
 
 if [ -n "${VERBATIM_SSH_KEY:-}" ]; then
-  mkdir -p ~/.ssh
-  chmod 700 ~/.ssh
-  echo "
-Host github-verbatim-repo-host
-  Hostname github.com
-  IdentityFile ~/.ssh/id_rsa_verbatim_repo
-  " >> ~/.ssh/config
-
-  echo "$VERBATIM_SSH_KEY" > ~/.ssh/id_rsa_verbatim_repo
-  chmod 600 ~/.ssh/id_rsa_verbatim_repo
-  verbatim_repo_host=github-verbatim-repo-host
+  echo "$VERBATIM_SSH_KEY" > /tmp/id_rsa_verbatim_repo
+  chmod 400 /tmp/id_rsa_verbatim_repo
+  verbatim_ssh_command="ssh -i /tmp/id_rsa_verbatim_repo"
 fi
 
 if [ -n "${WITHOUT_VERSIONS_SSH_KEY:-}" ]; then
-  mkdir -p ~/.ssh
-  chmod 700 ~/.ssh
-  echo "
-Host github-without-versions-repo-host
-  Hostname github.com
-  IdentityFile ~/.ssh/id_rsa_without_versions_repo
-  " >> ~/.ssh/config
-
-  echo "$WITHOUT_VERSIONS_SSH_KEY" > ~/.ssh/id_rsa_without_versions_repo
-  chmod 600 ~/.ssh/id_rsa_without_versions_repo
-  without_versions_repo_host=github-without-versions-repo-host
+  echo "$WITHOUT_VERSIONS_SSH_KEY" > /tmp/id_rsa_without_versions_repo
+  chmod 400 /tmp/id_rsa_without_versions_repo
+  without_versions_ssh_command="ssh -i /tmp/id_rsa_without_versions_repo"
 fi
 
 # Arguments: the git repo/folder to download to and the the WVM ID to download
@@ -205,8 +192,8 @@ clone_fresh_repos() {
     rm -rf "$verbatim_dir" "$without_versions_dir"
   fi
 
-  git clone git@"$verbatim_repo_host":javawizard/onshape-std-library-mirror "$verbatim_dir"
-  # git clone git@"$without_versions_repo_host":javawizard/onshape-std-library-mirror-without-versions "$without_versions_dir"
+  GIT_SSH_COMMAND="$verbatim_ssh_command" git clone "$VERBATIM_REPO_REMOTE" "$verbatim_dir"
+  GIT_SSH_COMMAND="$without_versions_ssh_command" git clone "$WITHOUT_VERSIONS_REPO_REMOTE" "$without_versions_dir"
 }
 
 # Argument: the path to the git repo to push
