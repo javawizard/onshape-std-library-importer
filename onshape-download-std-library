@@ -22,7 +22,10 @@ ONSHAPE_STD_VWM_ID=w/a855e4161c814f2e9ab3698a
 VERBATIM_REPO_REMOTE=git@github.com:javawizard/onshape-std-library-mirror
 WITHOUT_VERSIONS_REPO_REMOTE=git@github.com:javawizard/onshape-std-library-mirror-without-versions
 
-COMMIT_AUTHOR="Onshape Standard Library Importer <alex+onshape-std-library-importer@opengroove.org>"
+export GIT_AUTHOR_NAME="Onshape Standard Library Importer"
+export GIT_AUTHOR_EMAIL="alex+onshape-std-library-importer@opengroove.org"
+export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
+export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
 
 GITHUB_SSH_KNOWN_HOSTS="
 github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
@@ -187,7 +190,7 @@ created at: $createdAt
 "
 
   git -C "$git_repo_dir" add --all
-  git -C "$git_repo_dir" commit -m "$commit_message" --author="$COMMIT_AUTHOR" --date="$createdAt" --allow-empty
+  GIT_AUTHOR_DATE="$createdAt" GIT_COMMITTER_DATE="$createdAt" git -C "$git_repo_dir" commit -m "$commit_message" --allow-empty
 
   echo "[download_version_if_needed] Committed version $name as $(git -C "$git_repo_dir" rev-parse HEAD)."
 }
