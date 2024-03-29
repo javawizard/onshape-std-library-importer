@@ -216,7 +216,7 @@ push_changes() {
 
 clone_fresh_repos
 download_all_versions "$verbatim_dir"
-push_changes "$verbatim_dir"
+GIT_SSH_COMMAND="$verbatim_ssh_command" push_changes "$verbatim_dir"
 
 
 # experiments
