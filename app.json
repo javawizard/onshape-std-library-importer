@@ -1,0 +1,8 @@
+{
+  "cron": [
+    {
+      "command": "./onshape-download-std-library",
+      "schedule": "@hourly"
+    }
+  ]
+}

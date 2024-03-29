@@ -1,0 +1,218 @@
+#!/usr/bin/env bash
+# ^ to get bash 5 on my mac - needed for inherit_errexit and friends
+
+set -ueC -o pipefail
+shopt -s inherit_errexit
+shopt -u dotglob # so that we can easily remove all files in the mirror repo except for .git and friends. note that we could also do this via shopt -s extglob, then e.g. rm $git_repo_dir/!(.git)
+
+# (despite all of the above, lots of stuff - like missing variable errors in nested substitutions - still doesn't get caught. you (and future me) have been forewarned.)
+
+if [ -z "${AUTH_HEADER:-}" ]; then
+  if [ -x local/read-auth-header ]; then
+    AUTH_HEADER="$(local/read-auth-header)"
+  else
+    echo "No Onshape authentication header found in $AUTH_HEADER and no local/read-auth-header script found to look it up. Bailing." >&2
+    exit 1
+  fi
+fi
+
+ONSHAPE_STD_DOC_ID=12312312345abcabcabcdeff
+ONSHAPE_STD_VWM_ID=w/a855e4161c814f2e9ab3698a
+
+COMMIT_AUTHOR="Onshape Standard Library Importer <alex+onshape-std-library-importer@opengroove.org>"
+
+call_api() {
+  sleep 0.5 # to avoid ratelimiting
+  curl --no-progress-meter -H "Authorization: $AUTH_HEADER" https://cad.onshape.com/api/v6/"$1" "${@:2}"
+}
+
+json_field() {
+  echo "$1" | jq -r ."$2"
+}
+
+verbatim_dir="$PWD/local/onshape-std-library-mirror"
+without_versions_dir="$PWD/local/onshape-std-library-mirror-without-versions"
+
+verbatim_repo_host=github.com
+without_versions_repo_host=github.com
+
+if [ -n "${VERBATIM_SSH_KEY:-}" ]; then
+  echo "
+Host github-verbatim-repo-host
+  Hostname github.com
+  IdentityFile ~/.ssh/id_rsa_verbatim_repo
+  " >> ~/.ssh/config
+
+  echo "$VERBATIM_SSH_KEY" > ~/.ssh/id_rsa_verbatim_repo
+  verbatim_repo_host=github-verbatim-repo-host
+fi
+
+if [ -n "${WITHOUT_VERSIONS_SSH_KEY:-}" ]; then
+  echo "
+Host github-without-versions-repo-host
+  Hostname github.com
+  IdentityFile ~/.ssh/id_rsa_without_versions_repo
+  " >> ~/.ssh/config
+
+  echo "$WITHOUT_VERSIONS_SSH_KEY" > ~/.ssh/id_rsa_without_versions_repo
+  without_versions_repo_host=github-without-versions-repo-host
+fi
+
+# Arguments: the git repo/folder to download to and the the WVM ID to download
+download_elements() {
+  local git_repo_dir="$1" wvm_id="$2" # the set -u up top will cause this to blow up if we aren't passed at least two arguments
+
+  # safety check
+  if [ ! -d "$git_repo_dir"/.git ]; then
+    echo "$git_repo_dir does not contain a .git folder" >&2
+    exit 1
+  fi
+
+  if [ "$(ls "$git_repo_dir")" != "" ]; then
+    echo "[download_elements] Clearing non-hidden files from $git_repo_dir ..." >&2
+    rm "$git_repo_dir"/*
+  fi
+
+  echo "[download_elements] Downloading elements from $wvm_id into $git_repo_dir ..." >&2
+
+  call_api documents/d/"$ONSHAPE_STD_DOC_ID"/"$wvm_id"/elements?withThumbnails=false | jq -c '.[] | {"name", "id", "elementType", "dataType"}' | while read e; do
+    local name="$(json_field "$e" name)"
+    local id="$(json_field "$e" id)"
+    local elementType="$(json_field "$e" elementType)"
+    local dataType="$(json_field "$e" dataType)"
+
+    local suffix
+    case "$dataType" in
+      application/pdf)
+        suffix=.pdf
+        ;;
+      text/plain)
+        suffix=.txt
+        ;;
+      onshape/featurestudio|"")
+        suffix=
+        ;;
+      *)
+        echo "[download_elements] unknown datatype, skipping suffix: $dataType" >&2
+        suffix=
+        ;;
+    esac
+
+    echo "[download_elements] name: $name, type: $elementType, id: $id, datatype: $dataType, suffix: $suffix" >&2
+
+    case "$elementType" in
+      FEATURESTUDIO)
+        call_api featurestudios/d/"$ONSHAPE_STD_DOC_ID"/"$ONSHAPE_STD_VWM_ID"/e/"$id" | jq -r .contents > "$git_repo_dir/$name$suffix"
+        ;;
+      BLOB)
+        call_api blobelements/d/"$ONSHAPE_STD_DOC_ID"/"$ONSHAPE_STD_VWM_ID"/e/"$id" > "$git_repo_dir/$name$suffix"
+        ;;
+      *)
+        echo "ERROR: unknown type: $elementType" >&2
+        exit 1
+    esac
+  done
+
+}
+
+fetch_versions() {
+  call_api documents/d/"$ONSHAPE_STD_DOC_ID"/versions | jq -c '.[] | {"id", "name", "microversion", "createdAt", "parent"}'
+}
+
+# Arguments: the git repo to consult and the Onshape version ID to look for. Outputs nothing (but succeeds) if no matching commit is found.
+find_commit_for_version() {
+  local git_repo_dir="$1" version_id="$2"
+
+  if [ -z "$version_id" ]; then
+    echo "can't look for empty version" >&2
+    exit 1
+  fi
+
+  git -C "$git_repo_dir" rev-parse -q --verify :/"version id: $version_id" || true
+}
+
+# Arguments: the git repo to download into and the JSON blob from fetch_versions corresponding to the version to download
+download_version_if_needed() {
+  local git_repo_dir="$1"
+  local version_spec="$2"
+
+  local id="$(json_field "$version_spec" id)"
+  local name="$(json_field "$version_spec" name)"
+  local microversion="$(json_field "$version_spec" microversion)"
+  local createdAt="$(json_field "$version_spec" createdAt)"
+  local parent="$(json_field "$version_spec" parent)"
+
+  local this_version_commit="$(find_commit_for_version "$git_repo_dir" "$id")"
+  if [ -n "$this_version_commit" ]; then
+    echo "[download_version_if_needed] Version $name is already downloaded as commit $this_version_commit" >&2
+    return
+  fi
+
+  if [ -z "$parent" ]; then
+    # TODO: teach this to create the initial commit instead of requiring it to be created by hand
+    local parent_version_commit="$(git -C "$git_repo_dir" rev-parse -q --verify :/"initial commit")" # will explode if the initial commit doesn't exist yet, so no need to check
+  else
+    local parent_version_commit="$(find_commit_for_version "$git_repo_dir" "$parent")"
+    if [ -z "$parent_version_commit" ]; then
+      echo "[download_version_if_needed] Can't find commit for $parent (parent of $id a.k.a. $name). Something fishy is going on." >&2
+      exit 1
+    else
+      if [ "$(git -C "$git_repo_dir" rev-parse HEAD)" != "$parent_version_commit" ]; then
+        echo "[download_version_if_needed] Current HEAD ($(git -C "$git_repo_dir" rev-parse HEAD)) does not match the next version's parent commit ($parent_version_commit). This probably means the Onshape document being downloaded has a branch. We don't support documents with branches yet. (Or, you forgot to check out the git branch we're supposed to be building onto.)" >&2
+        exit 1
+      fi
+    fi
+  fi
+
+  echo "[download_version_if_needed] Downloading version $name ..."
+
+  git -C "$git_repo_dir" reset # in case a previous invocation crashed midway between doing git add --all and git commit
+
+  download_elements "$git_repo_dir" "v/$id" # this will rm all files beforehand, so no need to do that here
+
+  echo "[download_version_if_needed] Committing version $name ..."
+
+  local commit_message="Version $name
+
+version id: $id
+parent: $parent
+microversion: $microversion
+created at: $createdAt
+"
+
+  git -C "$git_repo_dir" add --all
+  git -C "$git_repo_dir" commit -m "$commit_message" --author="$COMMIT_AUTHOR" --date="$createdAt" --allow-empty
+
+  echo "[download_version_if_needed] Committed version $name as $(git -C "$git_repo_dir" rev-parse HEAD)."
+}
+
+download_all_versions() {
+  local git_repo_dir="$1"
+
+  fetch_versions | while read v; do
+    download_version_if_needed "$git_repo_dir" "$v"
+  done
+}
+
+clone_fresh_repos() {
+  if [ -d "$verbatim_dir" -o -d "$without_versions_dir" ]; then
+    rm -rf "$verbatim_dir" "$without_versions_dir"
+  fi
+
+  git clone git@"$verbatim_repo_host":javawizard/onshape-std-library-mirror "$verbatim_dir"
+  # git clone git@"$without_versions_repo_host":javawizard/onshape-std-library-mirror-without-versions "$without_versions_dir"
+}
+
+# Argument: the path to the git repo to push
+push_changes() {
+  git -C "$1" push origin main -f
+}
+
+clone_fresh_repos
+download_all_versions "$verbatim_dir"
+push_changes "$verbatim_dir"
+
+
+# experiments
+# call_api documents/d/"$ONSHAPE_STD_DOC_ID"/"$ONSHAPE_STD_VWM_ID"/elements?withThumbnails=false | jq -c '.[] | {"name", "id", "elementType", "dataType"}'
+# call_api documents/d/"$ONSHAPE_STD_DOC_ID"/versions | jq # -c '.[] | {"name", "id", "elementType", "dataType"}'
