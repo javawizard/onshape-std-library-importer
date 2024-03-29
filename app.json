@@ -1,7 +1,7 @@
 {
   "cron": [
     {
-      "command": "./onshape-download-std-library",
+      "command": "cd /app && ./onshape-download-std-library",
       "schedule": "@hourly"
     }
   ]
