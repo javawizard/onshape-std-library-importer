@@ -11,7 +11,7 @@ if [ -z "${AUTH_HEADER:-}" ]; then
   if [ -x local/read-auth-header ]; then
     AUTH_HEADER="$(local/read-auth-header)"
   else
-    echo "No Onshape authentication header found in $AUTH_HEADER and no local/read-auth-header script found to look it up. Bailing." >&2
+    echo 'No Onshape authentication header found in $AUTH_HEADER and no local/read-auth-header script found to look it up. Bailing.' >&2
     exit 1
   fi
 fi
