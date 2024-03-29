@@ -24,6 +24,12 @@ WITHOUT_VERSIONS_REPO_REMOTE=git@github.com:javawizard/onshape-std-library-mirro
 
 COMMIT_AUTHOR="Onshape Standard Library Importer <alex+onshape-std-library-importer@opengroove.org>"
 
+GITHUB_SSH_KNOWN_HOSTS="
+github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
+github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk=
+"
+
 call_api() {
   sleep 0.5 # to avoid ratelimiting
   curl --no-progress-meter -H "Authorization: $AUTH_HEADER" https://cad.onshape.com/api/v6/"$1" "${@:2}"
@@ -39,16 +45,23 @@ without_versions_dir="$(dirname "$0")/local/onshape-std-library-mirror-without-v
 verbatim_ssh_command=ssh
 without_versions_ssh_command=ssh
 
-if [ -n "${VERBATIM_SSH_KEY:-}" ]; then
-  echo "$VERBATIM_SSH_KEY" > /tmp/id_rsa_verbatim_repo
-  chmod 400 /tmp/id_rsa_verbatim_repo
-  verbatim_ssh_command="ssh -i /tmp/id_rsa_verbatim_repo"
-fi
+if [ -n "${VERBATIM_SSH_KEY:-}" -o -n "${WITHOUT_VERSIONS_SSH_KEY:-}" ]; then
+  echo "$GITHUB_SSH_KNOWN_HOSTS" > /tmp/ssh_known_hosts
+  chmod 400 /tmp/ssh_known_hosts
 
-if [ -n "${WITHOUT_VERSIONS_SSH_KEY:-}" ]; then
-  echo "$WITHOUT_VERSIONS_SSH_KEY" > /tmp/id_rsa_without_versions_repo
-  chmod 400 /tmp/id_rsa_without_versions_repo
-  without_versions_ssh_command="ssh -i /tmp/id_rsa_without_versions_repo"
+  ssh_command_prefix="ssh -o UserKnownHostsFile=/tmp/ssh_known_hosts -i"
+
+  if [ -n "${VERBATIM_SSH_KEY:-}" ]; then
+    echo "$VERBATIM_SSH_KEY" > /tmp/id_rsa_verbatim_repo
+    chmod 400 /tmp/id_rsa_verbatim_repo
+    verbatim_ssh_command="$ssh_command_prefix /tmp/id_rsa_verbatim_repo"
+  fi
+
+  if [ -n "${WITHOUT_VERSIONS_SSH_KEY:-}" ]; then
+    echo "$WITHOUT_VERSIONS_SSH_KEY" > /tmp/id_rsa_without_versions_repo
+    chmod 400 /tmp/id_rsa_without_versions_repo
+    without_versions_ssh_command="$ssh_command_prefix /tmp/id_rsa_without_versions_repo"
+  fi
 fi
 
 # Arguments: the git repo/folder to download to and the the WVM ID to download
@@ -193,7 +206,7 @@ clone_fresh_repos() {
   fi
 
   GIT_SSH_COMMAND="$verbatim_ssh_command" git clone "$VERBATIM_REPO_REMOTE" "$verbatim_dir"
-  GIT_SSH_COMMAND="$without_versions_ssh_command" git clone "$WITHOUT_VERSIONS_REPO_REMOTE" "$without_versions_dir"
+  # GIT_SSH_COMMAND="$without_versions_ssh_command" git clone "$WITHOUT_VERSIONS_REPO_REMOTE" "$without_versions_dir"
 }
 
 # Argument: the path to the git repo to push
