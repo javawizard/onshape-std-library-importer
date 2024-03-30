@@ -19,8 +19,7 @@ fi
 ONSHAPE_STD_DOC_ID=12312312345abcabcabcdeff
 ONSHAPE_STD_VWM_ID=w/a855e4161c814f2e9ab3698a
 
-VERBATIM_REPO_REMOTE=git@github.com:javawizard/onshape-std-library-mirror
-WITHOUT_VERSIONS_REPO_REMOTE=git@github.com:javawizard/onshape-std-library-mirror-without-versions
+REPO_REMOTE=git@github.com:javawizard/onshape-std-library-mirror
 
 export GIT_AUTHOR_NAME="Onshape Standard Library Importer"
 export GIT_AUTHOR_EMAIL="alex+onshape-std-library-importer@opengroove.org"
@@ -42,29 +41,16 @@ json_field() {
   echo "$1" | jq -r ."$2"
 }
 
-verbatim_dir="$(dirname "$0")/local/onshape-std-library-mirror"
-without_versions_dir="$(dirname "$0")/local/onshape-std-library-mirror-without-versions"
+repo_dir="$(dirname "$0")/local/onshape-std-library-mirror"
 
-verbatim_ssh_command=ssh
-without_versions_ssh_command=ssh
-
-if [ -n "${VERBATIM_SSH_KEY:-}" -o -n "${WITHOUT_VERSIONS_SSH_KEY:-}" ]; then
+if [ -n "${GITHUB_SSH_KEY:-}" ]; then
   echo "$GITHUB_SSH_KNOWN_HOSTS" > /tmp/ssh_known_hosts
   chmod 400 /tmp/ssh_known_hosts
 
-  ssh_command_prefix="ssh -o UserKnownHostsFile=/tmp/ssh_known_hosts -i"
+  echo "$GITHUB_SSH_KEY" > /tmp/id_rsa_github_onshape_mirror
+  chmod 400 /tmp/id_rsa_github_onshape_mirror
 
-  if [ -n "${VERBATIM_SSH_KEY:-}" ]; then
-    echo "$VERBATIM_SSH_KEY" > /tmp/id_rsa_verbatim_repo
-    chmod 400 /tmp/id_rsa_verbatim_repo
-    verbatim_ssh_command="$ssh_command_prefix /tmp/id_rsa_verbatim_repo"
-  fi
-
-  if [ -n "${WITHOUT_VERSIONS_SSH_KEY:-}" ]; then
-    echo "$WITHOUT_VERSIONS_SSH_KEY" > /tmp/id_rsa_without_versions_repo
-    chmod 400 /tmp/id_rsa_without_versions_repo
-    without_versions_ssh_command="$ssh_command_prefix /tmp/id_rsa_without_versions_repo"
-  fi
+  export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=/tmp/ssh_known_hosts -i /tmp/id_rsa_github_onshape_mirror"
 fi
 
 # Arguments: the git repo/folder to download to and the the WVM ID to download
@@ -111,10 +97,10 @@ download_elements() {
 
     case "$elementType" in
       FEATURESTUDIO)
-        call_api featurestudios/d/"$ONSHAPE_STD_DOC_ID"/"$ONSHAPE_STD_VWM_ID"/e/"$id" | jq -r .contents > "$git_repo_dir/$name$suffix"
+        call_api featurestudios/d/"$ONSHAPE_STD_DOC_ID"/"$wvm_id"/e/"$id" | jq -r .contents > "$git_repo_dir/$name$suffix"
         ;;
       BLOB)
-        call_api blobelements/d/"$ONSHAPE_STD_DOC_ID"/"$ONSHAPE_STD_VWM_ID"/e/"$id" > "$git_repo_dir/$name$suffix"
+        call_api blobelements/d/"$ONSHAPE_STD_DOC_ID"/"$wvm_id"/e/"$id" > "$git_repo_dir/$name$suffix"
         ;;
       *)
         echo "ERROR: unknown type: $elementType" >&2
@@ -128,17 +114,19 @@ fetch_versions() {
   call_api documents/d/"$ONSHAPE_STD_DOC_ID"/versions | jq -c '.[] | {"id", "name", "microversion", "createdAt", "parent"}'
 }
 
+# No longer used, but I'm keeping it around for reference and/or future use.
+#
 # Arguments: the git repo to consult and the Onshape version ID to look for. Outputs nothing (but succeeds) if no matching commit is found.
-find_commit_for_version() {
-  local git_repo_dir="$1" version_id="$2"
+# find_commit_for_version() {
+#   local git_repo_dir="$1" version_id="$2"
 
-  if [ -z "$version_id" ]; then
-    echo "can't look for empty version" >&2
-    exit 1
-  fi
+#   if [ -z "$version_id" ]; then
+#     echo "can't look for empty version" >&2
+#     exit 1
+#   fi
 
-  git -C "$git_repo_dir" rev-parse -q --verify :/"version id: $version_id" || true
-}
+#   git -C "$git_repo_dir" rev-parse -q --verify :/"version id: $version_id" || true
+# }
 
 # Arguments: the git repo to download into and the JSON blob from fetch_versions corresponding to the version to download
 download_version_if_needed() {
@@ -151,27 +139,14 @@ download_version_if_needed() {
   local createdAt="$(json_field "$version_spec" createdAt)"
   local parent="$(json_field "$version_spec" parent)"
 
-  local this_version_commit="$(find_commit_for_version "$git_repo_dir" "$id")"
-  if [ -n "$this_version_commit" ]; then
-    echo "[download_version_if_needed] Version $name is already downloaded as commit $this_version_commit" >&2
+  if git -C "$git_repo_dir" merge-base --is-ancestor :/"version id: $id" HEAD 2>/dev/null; then
+    echo "[download_version_if_needed] Version $name is already downloaded" >&2
     return
   fi
 
-  if [ -z "$parent" ]; then
-    # TODO: teach this to create the initial commit instead of requiring it to be created by hand
-    local parent_version_commit="$(git -C "$git_repo_dir" rev-parse -q --verify :/"initial commit")" # will explode if the initial commit doesn't exist yet, so no need to check
-  else
-    local parent_version_commit="$(find_commit_for_version "$git_repo_dir" "$parent")"
-    if [ -z "$parent_version_commit" ]; then
-      echo "[download_version_if_needed] Can't find commit for $parent (parent of $id a.k.a. $name). Something fishy is going on." >&2
-      exit 1
-    else
-      if [ "$(git -C "$git_repo_dir" rev-parse HEAD)" != "$parent_version_commit" ]; then
-        echo "[download_version_if_needed] Current HEAD ($(git -C "$git_repo_dir" rev-parse HEAD)) does not match the next version's parent commit ($parent_version_commit). This probably means the Onshape document being downloaded has a branch. We don't support documents with branches yet. (Or, you forgot to check out the git branch we're supposed to be building onto.)" >&2
-        exit 1
-      fi
-    fi
-  fi
+  # Note that this doesn't handle Onshape document branches. That's fine because Onshape never branches their canonical
+  # standard library document, but if we ever generalize this script to run on arbitrary Onshape documents, it'll need
+  # to be modified to track branches correctly.
 
   echo "[download_version_if_needed] Downloading version $name ..."
 
@@ -203,13 +178,12 @@ download_all_versions() {
   done
 }
 
-clone_fresh_repos() {
-  if [ -d "$verbatim_dir" -o -d "$without_versions_dir" ]; then
-    rm -rf "$verbatim_dir" "$without_versions_dir"
+clone_fresh_repo() {
+  if [ -d "$2" ]; then
+    rm -rf "$2"
   fi
 
-  GIT_SSH_COMMAND="$verbatim_ssh_command" git clone "$VERBATIM_REPO_REMOTE" "$verbatim_dir"
-  # GIT_SSH_COMMAND="$without_versions_ssh_command" git clone "$WITHOUT_VERSIONS_REPO_REMOTE" "$without_versions_dir"
+  git clone "$1" "$2"
 }
 
 # Argument: the path to the git repo to push
@@ -217,9 +191,9 @@ push_changes() {
   git -C "$1" push origin main -f
 }
 
-clone_fresh_repos
-download_all_versions "$verbatim_dir"
-GIT_SSH_COMMAND="$verbatim_ssh_command" push_changes "$verbatim_dir"
+clone_fresh_repo "$REPO_REMOTE" "$repo_dir"
+download_all_versions "$repo_dir"
+push_changes "$repo_dir"
 
 
 # experiments
