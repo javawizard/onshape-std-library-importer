@@ -137,14 +137,15 @@ download_version_if_needed() {
 
   local id="$(json_field "$version_spec" id)"
   local name="$(json_field "$version_spec" name)"
-  local microversion="$(json_field "$version_spec" microversion)"
-  local createdAt="$(json_field "$version_spec" createdAt)"
-  local parent="$(json_field "$version_spec" parent)"
 
-  if git -C "$git_repo_dir" merge-base --is-ancestor :/"version id: $id" HEAD 2>/dev/null; then
+  if git -C "$git_repo_dir" log | grep -E "version id: $id" >/dev/null; then
     echo "[download_version_if_needed] [$(git -C "$git_repo_dir" rev-parse --abbrev-ref HEAD)] Version $name is already downloaded" >&2
     return
   fi
+
+  local microversion="$(json_field "$version_spec" microversion)"
+  local createdAt="$(json_field "$version_spec" createdAt)"
+  local parent="$(json_field "$version_spec" parent)"
 
   # Note that this doesn't handle Onshape document branches. That's fine because Onshape never branches their canonical
   # standard library document, but if we ever generalize this script to run on arbitrary Onshape documents, it'll need
@@ -184,7 +185,7 @@ post_process_without_versions() {
   # replace version numbers with sparkles to cut down on diff noise
   # NOTE: Onshape's standard library does not use directories, so we don't worry about recursion here. We'll need to
   # change that if we ever generalize this to mirroring arbitrary Onshape documents.
-  sed -Ei 's/^(FeatureScript )[0-9\.]+(;)/\1✨\2/gs/(path : "onshape.+", version : ")[0-9\.]+(")/\1✨\2/g' *.fs
+  (cd "$1" && sed -Ei 's/^(FeatureScript )[0-9\.]+(;)/\1✨\2/gs/(path : "onshape.+", version : ")[0-9\.]+(")/\1✨\2/g' *.fs)
 }
 
 download_all_versions() {
