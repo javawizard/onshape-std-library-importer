@@ -1,0 +1,18 @@
+#!/bin/bash
+
+set -ue
+
+# Only needs to be run once to build the initial without-versions branch after the main branch has been populated.
+# Leaving here for posterity, or in case I ever need to regenerate without-versions again (like if I were to
+# retroactively change the format of all of the commit messages or something).
+
+cd "$(dirname "$0")/local/onshape-std-library-mirror"
+
+git checkout main
+git checkout -b without-versions
+
+git filter-repo --replace-message ../../git-filter-repo-specs/without-versions/replace-message.txt --replace-text ../../git-filter-repo-specs/without-versions/replace-text.txt --refs without-versions -f
+
+echo
+echo "without-versions branch created; please examine and, if all looks good, do a git push."
+echo

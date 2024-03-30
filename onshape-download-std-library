@@ -132,6 +132,8 @@ fetch_versions() {
 download_version_if_needed() {
   local git_repo_dir="$1"
   local version_spec="$2"
+  local post_process_function="$3"
+  local commit_message_prefix="$4"
 
   local id="$(json_field "$version_spec" id)"
   local name="$(json_field "$version_spec" name)"
@@ -140,7 +142,7 @@ download_version_if_needed() {
   local parent="$(json_field "$version_spec" parent)"
 
   if git -C "$git_repo_dir" merge-base --is-ancestor :/"version id: $id" HEAD 2>/dev/null; then
-    echo "[download_version_if_needed] Version $name is already downloaded" >&2
+    echo "[download_version_if_needed] [$(git -C "$git_repo_dir" rev-parse --abbrev-ref HEAD)] Version $name is already downloaded" >&2
     return
   fi
 
@@ -154,9 +156,12 @@ download_version_if_needed() {
 
   download_elements "$git_repo_dir" "v/$id" # this will rm all files beforehand, so no need to do that here
 
+  echo "[download_version_if_needed] Post-processing version using $post_process_function ..."
+  "$post_process_function" "$git_repo_dir"
+
   echo "[download_version_if_needed] Committing version $name ..."
 
-  local commit_message="Version $name
+  local commit_message="${commit_message_prefix}Version $name
 
 version id: $id
 parent: $parent
@@ -170,11 +175,25 @@ created at: $createdAt
   echo "[download_version_if_needed] Committed version $name as $(git -C "$git_repo_dir" rev-parse HEAD)."
 }
 
+post_process_main() {
+  # do nothing; main is good to go as is
+  :
+}
+
+post_process_without_versions() {
+  # replace version numbers with sparkles to cut down on diff noise
+  # NOTE: Onshape's standard library does not use directories, so we don't worry about recursion here. We'll need to
+  # change that if we ever generalize this to mirroring arbitrary Onshape documents.
+  sed -Ei 's/^(FeatureScript )[0-9\.]+(;)/\1✨\2/gs/(path : "onshape.+", version : ")[0-9\.]+(")/\1✨\2/g' *.fs
+}
+
 download_all_versions() {
   local git_repo_dir="$1"
+  local post_process_function="$2"
+  local commit_message_prefix="$3"
 
   fetch_versions | while read v; do
-    download_version_if_needed "$git_repo_dir" "$v"
+    download_version_if_needed "$git_repo_dir" "$v" "$post_process_function" "$commit_message_prefix"
   done
 }
 
@@ -186,14 +205,22 @@ clone_fresh_repo() {
   git clone "$1" "$2"
 }
 
-# Argument: the path to the git repo to push
+checkout() {
+  git -C "$1" checkout "$2"
+}
+
+# Arguments: the path to the git repo to push and the branch to push
 push_changes() {
-  git -C "$1" push origin main -f
+  git -C "$1" push origin "$2" -f
 }
 
 clone_fresh_repo "$REPO_REMOTE" "$repo_dir"
-download_all_versions "$repo_dir"
-push_changes "$repo_dir"
+download_all_versions "$repo_dir" post_process_main ""
+checkout "$repo_dir" without-versions
+# TODO: reuse files from the main branch instead of redownloading them
+download_all_versions "$repo_dir" post_process_without_versions "[without versions] " # update git-filter-repo-specs/without-versions/replace-message.txt when changing this prefix
+push_changes "$repo_dir" main
+push_changes "$repo_dir" without-versions
 
 
 # experiments

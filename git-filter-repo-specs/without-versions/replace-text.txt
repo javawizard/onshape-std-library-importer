@@ -1,0 +1,5 @@
+# Replace things that look like Onshape standard library and FeatureScript version numbers with sparkles;
+# this is used to create the without-versions branch and makes it easier to see when things change that aren't just
+# version bumps when browsing the Git repo history
+regex:^(FeatureScript )[0-9\.]+(;)==>\1✨\2
+regex:(path : "onshape.+", version : ")[0-9\.]+(")==>\1✨\2
