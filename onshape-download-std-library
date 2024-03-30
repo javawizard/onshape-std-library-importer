@@ -185,7 +185,15 @@ post_process_without_versions() {
   # replace version numbers with sparkles to cut down on diff noise
   # NOTE: Onshape's standard library does not use directories, so we don't worry about recursion here. We'll need to
   # change that if we ever generalize this to mirroring arbitrary Onshape documents.
-  (cd "$1" && sed -Ei 's/^(FeatureScript )[0-9\.]+(;)/\1✨\2/gs/(path : "onshape.+", version : ")[0-9\.]+(")/\1✨\2/g' *.fs)
+  sed_i_arg=()
+  if [ "$(uname)" == Darwin ]; then
+    # On macOS (and technically any BSD-derived system), sed's -i flag takes a mandatory argument.
+    # On Linux, the argument is optional, and cannot be the empty string - which means there's no portable way to use
+    # sed -i, so we have to manually detect macOS and add the empty argument to the -i flag.
+    sed_i_arg=('')
+  fi
+
+  (cd "$1" && sed -Ei "${sed_i_arg[@]}" 's/^(FeatureScript )[0-9\.]+(\;)/\1✨\2/g;s/(path : "onshape.+", version : ")[0-9\.]+(")/\1✨\2/g' *.fs)
 }
 
 download_all_versions() {
