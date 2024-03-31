@@ -11,7 +11,7 @@ To run the importer locally, you'll first need an Onshape account. You can sign 
 Then you'll need to set up an Onshape API key. Head over to the Onshape [developer portal](https://dev-portal.onshape.com/keys), click the "Create new API key button", check "Application can read your documents", then click "Create API key". Then turn the key into an HTTP basic authentication header by running the following:
 
 ```
-echo -n 'Basic ' && (echo '<access key>:<secret key>' | base64)
+echo -n 'Basic ' && (echo -n '<access key>:<secret key>' | base64)
 ```
 
 where `<access key>` and `<secret key>` are the keys shown in the Onshape developer portal after you clicked the "Create API key" button.
