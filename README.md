@@ -65,4 +65,4 @@ where `<id>` is the ID you copied. It'll run the script and live stream its outp
 
 ## Feedback
 
-Feel free to open an issue if there's something you'd like to see changedd, or feel free to submit a PR.
+Feel free to open an issue if there's something you'd like to see changed, or feel free to submit a PR.
