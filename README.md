@@ -1,6 +1,6 @@
 # onshape-std-library-importer
 
-This is the thing that keeps [onshape-std-library-mirror](https://github.com/javawizard/onshape-std-library-importer) up to date. See that repo's [README](https://github.com/javawizard/onshape-std-library-mirror/blob/main/README.md) for more info on what this is.
+This is the thing that keeps [onshape-std-library-mirror](https://github.com/javawizard/onshape-std-library-mirror) up to date. See that repo's [README](https://github.com/javawizard/onshape-std-library-mirror/blob/main/README.md) for more info on what this is.
 
 ## Local development
 
