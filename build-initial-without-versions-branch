@@ -9,6 +9,7 @@ set -ue
 cd "$(dirname "$0")/local/onshape-std-library-mirror"
 
 git checkout main
+git branch -D without-versions || true
 git checkout -b without-versions
 
 git filter-repo --replace-message ../../git-filter-repo-specs/without-versions/replace-message.txt --replace-text ../../git-filter-repo-specs/without-versions/replace-text.txt --refs without-versions -f
