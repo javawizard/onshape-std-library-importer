@@ -201,7 +201,7 @@ post_process_without_versions() {
     sed_i_arg=('')
   fi
 
-  (cd "$1" && sed -Ei "${sed_i_arg[@]}" 's/^(FeatureScript )[0-9\.]+(\;)/\1✨\2/g;s/(path : "onshape.+", version : ")[0-9\.]+(")/\1✨\2/g' *.fs)
+  (cd "$1" && sed -Ei "${sed_i_arg[@]}" 's/^(FeatureScript )[0-9\.]+(\;)/\1✨\2/g;s/(path *: *"onshape.+", *version *: *")[0-9\.]+(")/\1✨\2/g' *.fs)
 }
 
 download_all_versions() {
