@@ -242,7 +242,7 @@ download_all_versions "$repo_dir" post_process_main ""
 checkout "$repo_dir" without-versions
 merge_readme_branch "$repo_dir"
 # TODO: reuse files from the main branch instead of redownloading them
-download_all_versions "$repo_dir" post_process_without_versions "[without versions] " # update git-filter-repo-specs/without-versions/replace-message.txt when changing this prefix
+download_all_versions "$repo_dir" post_process_without_versions "[✨] " # update git-filter-repo-specs/without-versions/replace-message.txt when changing this prefix
 push_changes "$repo_dir" main
 push_changes "$repo_dir" without-versions
 
