@@ -219,7 +219,7 @@ clone_fresh_repo() {
     rm -rf "$2"
   fi
 
-  git clone "$1" "$2"
+  git clone -b main "$1" "$2" # `without-versions` is now the default branch in github, so add `-b main` to checkout main specifically
 }
 
 checkout() {
