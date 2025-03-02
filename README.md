@@ -6,7 +6,7 @@ This is the thing that keeps [onshape-std-library-mirror](https://github.com/jav
 
 (Right now the script is hardcoded to push and pull from [javawizard/onshape-std-library-mirror](https://github.com/javawizard/onshape-std-library-mirror), so only I can run it at the moment. PRs gladly accepted to make the remote configurable.)
 
-To run the importer locally, you'll first need an Onshape account. You can sign up for one for free [here](https://www.onshape.com/en/sign-up-form) as long as you're fine with all of your documents being public.
+To run the importer locally, you'll first need an Onshape account. You can sign up for one for free [here](https://www.onshape.com/en/sign-up) as long as you're fine with all of your documents being public.
 
 Then you'll need to set up an Onshape API key. Head over to the Onshape [developer portal](https://dev-portal.onshape.com/keys), click the "Create new API key button", check "Application can read your documents", then click "Create API key". Then turn the key into an HTTP basic authentication header by running the following:
 
